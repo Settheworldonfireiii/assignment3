@@ -144,13 +144,18 @@ class CaptioningRNN(object):
         ind2vec,cache_ind2vc = word_embedding_forward(captions_in, W_embed)
         if self.cell_type == 'rnn':
             renn_forw, cache_rfw = rnn_forward(ind2vec,hid_state_init,Wx, Wh,b)
+        elif self.cell_type=='lstm':
+            renn_forw, cache_rfw = lstm_forward(ind2vec,hid_state_init,Wx, Wh,b)
         scores, cache_sc=temporal_affine_forward(renn_forw, W_vocab, b_vocab)   
         loss, dout = temporal_softmax_loss(scores, captions_out, mask)
         
         
         
         dh,grads['W_vocab'],grads['b_vocab']= temporal_affine_backward(dout, cache_sc)
-        dx_rnn_back,dh0,grads['Wx'],grads['Wh'],grads['b'] =rnn_backward(dh,cache_rfw)
+        if self.cell_type == 'rnn':
+            dx_rnn_back,dh0,grads['Wx'],grads['Wh'],grads['b'] =rnn_backward(dh,cache_rfw)
+        elif self.cell_type=='lstm':
+            dx_rnn_back,dh0,grads['Wx'],grads['Wh'],grads['b'] =lstm_backward(dh,cache_rfw)
         grads['W_embed']=word_embedding_backward(dx_rnn_back,cache_ind2vc)
         dx, grads['W_proj'], grads['b_proj'] = affine_backward(dh0, cache_h1st)
                                                                                                        
@@ -221,9 +226,12 @@ class CaptioningRNN(object):
         ###########################################################################
         h, cache_proj = affine_forward(features, W_proj, b_proj)
         x = word_embedding_forward(self._start, W_embed)[0]
+        c = np.zeros(h.shape)
         for t in range(max_length):
             if self.cell_type=='rnn':
                 h, _ = rnn_step_forward(x, h, Wx, Wh, b)
+            elif self.cell_type=='lstm':
+                h, c, _ = lstm_step_forward(x, h, c, Wx, Wh, b)
             scores, _ = affine_forward(h, W_vocab, b_vocab)
             captions[:,t] = np.argmax(scores, axis=1)
             x = word_embedding_forward(captions[:,t], W_embed)[0]
